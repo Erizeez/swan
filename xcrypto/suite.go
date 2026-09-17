@@ -164,9 +164,6 @@ func ParseProposal(s string) (Proposal, error) {
 	if len(p.Encryption) == 0 {
 		return Proposal{}, errors.New("xcrypto: proposal is missing an encryption transform")
 	}
-	if len(p.DH) == 0 {
-		return Proposal{}, errors.New("xcrypto: proposal is missing a DH group")
-	}
 
 	hasAEAD := false
 	hasNonAEAD := false
@@ -324,6 +321,9 @@ func prfMatchesIntegrity(prf uint16, integ *Integrity) bool {
 }
 
 func (p Proposal) selectDH(remote *Proposal) (*DH, error) {
+	if len(p.DH) == 0 {
+		return nil, nil
+	}
 	for _, want := range p.DH {
 		if !hasU16(remote.DH, want) {
 			continue

@@ -189,6 +189,11 @@ func (c *Config) Validate() error {
 	if len(c.IKEProposals) == 0 {
 		return fmt.Errorf("swan: IKEProposals are required")
 	}
+	for _, p := range c.IKEProposals {
+		if len(p.DH) == 0 {
+			return fmt.Errorf("swan: IKE proposals require a DH group")
+		}
+	}
 	if len(c.ESPProposals) == 0 {
 		return fmt.Errorf("swan: ESPProposals are required")
 	}
