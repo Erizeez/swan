@@ -356,10 +356,11 @@ func (h *Handshake) decodeChildSelection(sa payload.SA) (uint32, *xcrypto.Select
 	}
 	dh := h.state.SelectedIKE.DH
 	if dhID != 0 {
-		if dhID != xcrypto.TransformDHCurve25519 {
-			return 0, nil, fmt.Errorf("control: unsupported CHILD_SA DH group %d", dhID)
+		dhObj, err := xcrypto.NewDH(dhID)
+		if err != nil {
+			return 0, nil, fmt.Errorf("control: unsupported CHILD_SA DH group %d: %w", dhID, err)
 		}
-		dh = &xcrypto.DH{TransformID: dhID, Name: "curve25519"}
+		dh = dhObj
 	}
 	return peerSPI, &xcrypto.Selection{
 		Encryption: enc,

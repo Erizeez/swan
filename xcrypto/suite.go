@@ -10,6 +10,8 @@ import (
 // belongs to the crypto layer; swan/wire can only see syntax (numbers).
 const (
 	// DH groups.
+	TransformDHMODP1024   uint16 = 2
+	TransformDHMODP2048   uint16 = 14
 	TransformDHCurve25519 uint16 = 31
 
 	// PRFs.
@@ -115,6 +117,12 @@ var prfTokens = map[string]uint16{
 }
 
 var dhTokens = map[string]uint16{
+	"modp1024":   TransformDHMODP1024,
+	"dh2":        TransformDHMODP1024,
+	"group2":     TransformDHMODP1024,
+	"modp2048":   TransformDHMODP2048,
+	"dh14":       TransformDHMODP2048,
+	"group14":    TransformDHMODP2048,
 	"curve25519": TransformDHCurve25519,
 	"x25519":     TransformDHCurve25519,
 }
@@ -323,6 +331,10 @@ func (p Proposal) selectDH(remote *Proposal) (*DH, error) {
 		switch want {
 		case TransformDHCurve25519:
 			return &DH{TransformID: want, Name: "curve25519"}, nil
+		case TransformDHMODP1024:
+			return &DH{TransformID: want, Name: "modp1024"}, nil
+		case TransformDHMODP2048:
+			return &DH{TransformID: want, Name: "modp2048"}, nil
 		}
 	}
 	return nil, errors.New("xcrypto: no compatible DH group")

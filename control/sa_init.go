@@ -122,6 +122,13 @@ func (h *Handshake) selectIKESuite(forcedDHGroup uint16) (*xcrypto.Proposal, *xc
 	if err != nil {
 		return nil, nil, fmt.Errorf("control: select IKE proposal: %w", err)
 	}
+	if forcedDHGroup != 0 {
+		dhObj, err := xcrypto.NewDH(forcedDHGroup)
+		if err != nil {
+			return nil, nil, fmt.Errorf("control: unsupported forced DH group %d: %w", forcedDHGroup, err)
+		}
+		selection.DH = dhObj
+	}
 	return suite, selection, nil
 }
 

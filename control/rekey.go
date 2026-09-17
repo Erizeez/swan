@@ -166,7 +166,13 @@ func (r *Running) buildChildRekeyRequestPayloads(rc *RekeyContext) ([]byte, erro
 	)
 
 	if r.cfg.Rekey.ChildPFS {
-		ke, err := generateRekeyDH()
+		group := uint16(xcrypto.TransformDHCurve25519)
+		if len(r.cfg.ESP) > 0 && len(r.cfg.ESP[0].DH) > 0 {
+			group = r.cfg.ESP[0].DH[0]
+		} else if r.state.SelectedIKE != nil && r.state.SelectedIKE.DH != nil {
+			group = r.state.SelectedIKE.DH.TransformID
+		}
+		ke, err := generateRekeyDH(group)
 		if err != nil {
 			return nil, err
 		}
@@ -193,7 +199,13 @@ func (r *Running) buildIKERekeyRequestPayloads(rc *RekeyContext) ([]byte, error)
 	if err != nil {
 		return nil, fmt.Errorf("control: generate new initiator SPI: %w", err)
 	}
-	ke, err := generateRekeyDH()
+	group := uint16(xcrypto.TransformDHCurve25519)
+	if r.state.SelectedIKE != nil && r.state.SelectedIKE.DH != nil {
+		group = r.state.SelectedIKE.DH.TransformID
+	} else if len(r.cfg.IKE) > 0 && len(r.cfg.IKE[0].DH) > 0 {
+		group = r.cfg.IKE[0].DH[0]
+	}
+	ke, err := generateRekeyDH(group)
 	if err != nil {
 		return nil, err
 	}
@@ -219,8 +231,8 @@ type generatedRekeyDH struct {
 	ke payload.KeyExchange
 }
 
-func generateRekeyDH() (generatedRekeyDH, error) {
-	dh, err := xcrypto.GenerateDH(xcrypto.TransformDHCurve25519)
+func generateRekeyDH(group uint16) (generatedRekeyDH, error) {
+	dh, err := xcrypto.GenerateDH(group)
 	if err != nil {
 		return generatedRekeyDH{}, fmt.Errorf("control: generate rekey DH: %w", err)
 	}
@@ -228,7 +240,7 @@ func generateRekeyDH() (generatedRekeyDH, error) {
 	if err != nil {
 		return generatedRekeyDH{}, fmt.Errorf("control: encode rekey KE: %w", err)
 	}
-	return generatedRekeyDH{dh: dh, ke: payload.KeyExchange{DHGroup: xcrypto.TransformDHCurve25519, Data: pub}}, nil
+	return generatedRekeyDH{dh: dh, ke: payload.KeyExchange{DHGroup: group, Data: pub}}, nil
 }
 
 // childRekeyResponse is the validated CREATE_CHILD_SA child-rekey
@@ -283,8 +295,13 @@ func (r *Running) parseChildRekeyResponse(inner []wire.Payload) (childRekeyRespo
 			if parseErr != nil {
 				return out, parseErr
 			}
-			if parsed.DHGroup != xcrypto.TransformDHCurve25519 {
-				return out, fmt.Errorf("control: unsupported child rekey DH group %d", parsed.DHGroup)
+			if _, err := xcrypto.NewDH(parsed.DHGroup); err != nil {
+				return out, fmt.Errorf("control: unsupported child rekey DH group %d: %w", parsed.DHGroup, err)
+			}
+			if rc := r.state.Rekey; rc != nil && rc.LocalDH != nil {
+				if parsed.DHGroup != rc.LocalDH.Group() {
+					return out, fmt.Errorf("control: child rekey DH group %d does not match local %d", parsed.DHGroup, rc.LocalDH.Group())
+				}
 			}
 			out.KEr = append([]byte(nil), parsed.Data...)
 			seenKE = true
@@ -359,8 +376,13 @@ func (r *Running) parseIKERekeyResponse(inner []wire.Payload) (selection *xcrypt
 			if parseErr != nil {
 				return nil, 0, nil, nil, parseErr
 			}
-			if parsed.DHGroup != xcrypto.TransformDHCurve25519 {
-				return nil, 0, nil, nil, fmt.Errorf("control: unsupported IKE rekey DH group %d", parsed.DHGroup)
+			if _, err := xcrypto.NewDH(parsed.DHGroup); err != nil {
+				return nil, 0, nil, nil, fmt.Errorf("control: unsupported IKE rekey DH group %d: %w", parsed.DHGroup, err)
+			}
+			if rc := r.state.Rekey; rc != nil && rc.LocalDH != nil {
+				if parsed.DHGroup != rc.LocalDH.Group() {
+					return nil, 0, nil, nil, fmt.Errorf("control: IKE rekey DH group %d does not match local %d", parsed.DHGroup, rc.LocalDH.Group())
+				}
 			}
 			ker = append([]byte(nil), parsed.Data...)
 		case wire.PayloadTypeTSi, wire.PayloadTypeTSr, wire.PayloadTypeAuth, wire.PayloadTypeEAP:

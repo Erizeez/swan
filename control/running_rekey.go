@@ -552,6 +552,7 @@ func (r *Running) processPeerChildRekey(ctx context.Context, tx chan<- *transpor
 	var peerTSi, peerTSr []byte
 	var peerNi []byte
 	var peerKE []byte
+	var peerDHGroup uint16
 	for i := range inner {
 		p := &inner[i]
 		switch p.Type {
@@ -572,10 +573,11 @@ func (r *Running) processPeerChildRekey(ctx context.Context, tx chan<- *transpor
 			if err != nil {
 				return err
 			}
-			if k.DHGroup != xcrypto.TransformDHCurve25519 {
-				return fmt.Errorf("control: unsupported peer child rekey DH group %d", k.DHGroup)
+			if _, err := xcrypto.NewDH(k.DHGroup); err != nil {
+				return fmt.Errorf("control: unsupported peer child rekey DH group %d: %w", k.DHGroup, err)
 			}
 			peerKE = append([]byte(nil), k.Data...)
+			peerDHGroup = k.DHGroup
 		case wire.PayloadTypeTSi:
 			peerTSi = append([]byte(nil), p.Body...)
 		case wire.PayloadTypeTSr:
@@ -638,7 +640,7 @@ func (r *Running) processPeerChildRekey(ctx context.Context, tx chan<- *transpor
 	var kerPayload payload.KeyExchange
 	var shared []byte
 	if len(peerKE) > 0 {
-		gen, err := generateRekeyDH()
+		gen, err := generateRekeyDH(peerDHGroup)
 		if err != nil {
 			return err
 		}
@@ -734,6 +736,7 @@ func (r *Running) processPeerIKERekey(ctx context.Context, tx chan<- *transport.
 
 	var saPayload *payload.SA
 	var peerNi, peerKE []byte
+	var peerDHGroup uint16
 	for i := range inner {
 		p := &inner[i]
 		switch p.Type {
@@ -754,10 +757,11 @@ func (r *Running) processPeerIKERekey(ctx context.Context, tx chan<- *transport.
 			if err != nil {
 				return err
 			}
-			if k.DHGroup != xcrypto.TransformDHCurve25519 {
-				return fmt.Errorf("control: unsupported peer IKE rekey DH group %d", k.DHGroup)
+			if _, err := xcrypto.NewDH(k.DHGroup); err != nil {
+				return fmt.Errorf("control: unsupported peer IKE rekey DH group %d: %w", k.DHGroup, err)
 			}
 			peerKE = append([]byte(nil), k.Data...)
+			peerDHGroup = k.DHGroup
 		case wire.PayloadTypeTSi, wire.PayloadTypeTSr:
 			return errors.New("control: unexpected TS payload in peer IKE rekey")
 		}
@@ -788,7 +792,7 @@ func (r *Running) processPeerIKERekey(ctx context.Context, tx chan<- *transport.
 	if err != nil {
 		return err
 	}
-	gen, err := generateRekeyDH()
+	gen, err := generateRekeyDH(peerDHGroup)
 	if err != nil {
 		return err
 	}
